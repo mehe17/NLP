@@ -1,7 +1,6 @@
 import streamlit as st
-from chatbot import answer_query
-from retriever import build_index
 import os
+from openai import OpenAI
 
 # -----------------------
 # Page configuration
@@ -17,9 +16,8 @@ with st.expander("Setup & Notes"):
         """
 - This demo uses **RAG** (FAISS + SentenceTransformers) to retrieve policy excerpts and a simple LLM wrapper.
 - LLM modes:
-  - **HF**: Use Hugging Face Inference API. Set `HF_API_TOKEN` in your environment (or enter below).
+  - **HF**: Uses Hugging Face Inference API. Token is securely stored in Streamlit Secrets.
   - **Mock**: Fast local fallback (rule-based) for demos without any API keys.
-- If you want to use a local model (e.g., Ollama), you can swap the `LLMClient._call_hf` implementation to call your local endpoint.
 """
     )
 
@@ -28,19 +26,18 @@ with st.expander("Setup & Notes"):
 # -----------------------
 st.sidebar.header("Configuration")
 mode = st.sidebar.selectbox("LLM Mode", ["hf", "mock"])
-hf_token_input = st.sidebar.text_input("Hugging Face Token (optional)", type="password")
-hf_model = st.sidebar.text_input("HF Model (optional)", value="mistralai/Mistral-7B-Instruct-v0")
+hf_model = st.sidebar.text_input("HF Model (optional)", value="moonshotai/Kimi-K2-Instruct-v0")
+os.environ["HF_MODEL"] = hf_model  # optional model override
 
-if hf_token_input:
-    os.environ["HF_API_TOKEN"] = hf_token_input
-if hf_model:
-    os.environ["HF_MODEL"] = hf_model
-
-# Build RAG index
-if st.sidebar.button("(Re)build RAG index"):
-    with st.spinner("Building index..."):
-        build_index(force_rebuild=True)
-    st.success("Index built.")
+# -----------------------
+# Initialize Hugging Face client (online LLM)
+# -----------------------
+if mode == "hf":
+    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
+    client = OpenAI(
+        base_url="https://router.huggingface.co/v1",
+        api_key=os.environ["HF_TOKEN"],
+    )
 
 # -----------------------
 # Initialize session state
@@ -49,11 +46,10 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 # -----------------------
-# Mock answer function (order ID-aware)
+# Mock answer function
 # -----------------------
 def mock_answer(query, order_id=None):
     q = query.lower()
-
     if "cancel" in q:
         msg = (
             "You can cancel orders within 5 minutes after placing the order "
@@ -79,11 +75,26 @@ def mock_answer(query, order_id=None):
     else:
         msg = "I'm sorry, I didn't understand that. Can you rephrase or ask about cancellations, refunds, tracking, or delivery times?"
 
-    # Include order ID if provided
     if order_id:
         msg += f" (Order ID: {order_id})"
-
     return msg
+
+# -----------------------
+# Function to query online LLM
+# -----------------------
+def answer_query(query, order_id=None):
+    if mode == "mock":
+        return mock_answer(query, order_id)
+
+    messages = [{"role": "user", "content": query}]
+    if order_id:
+        messages.append({"role": "system", "content": f"Order ID: {order_id}"})
+
+    completion = client.chat.completions.create(
+        model=os.environ["HF_MODEL"],
+        messages=messages
+    )
+    return completion.choices[0].message
 
 # -----------------------
 # Layout: Columns
@@ -111,7 +122,6 @@ with col1:
 # Right column: Chat interface
 with col2:
     st.header("Chat")
-    # Safe text input using only the key
     query = st.text_input(
         "Ask the Memo Hero Delivery bot anything about orders, cancellations, refunds, delivery times, tracking, or missing items...",
         key="query_input"
@@ -120,11 +130,7 @@ with col2:
 
     if submit and query:
         with st.spinner("Thinking..."):
-            if mode == "mock":
-                resp = mock_answer(query, order_id=order_id if order_id else None)
-            else:
-                resp = answer_query(query, order_id=order_id if order_id else None, llm_mode=mode)
-        # Append to history
+            resp = answer_query(query, order_id=order_id if order_id else None)
         st.session_state.history.append({"user": query, "bot": resp})
 
     # Keep only last 20 messages
