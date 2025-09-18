@@ -6,4 +6,4 @@ faiss-cpu
 requests
 python-dotenv
 tqdm
-
+openai
