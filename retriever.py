@@ -63,4 +63,3 @@ def get_relevant_docs(query, k=3):
         if idx < len(docs):
             results.append(docs[idx])
     return results
-
