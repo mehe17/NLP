@@ -7,16 +7,15 @@ chatbot.py
 
 import os
 import requests
-import json
-from retriever import get_relevant_docs
 import pandas as pd
 from pathlib import Path
+from retriever import get_relevant_docs
 
 DATA_DIR = Path("data")
 ORDERS_PATH = DATA_DIR / "orders.csv"
 
 # Basic prompt template
-PROMPT_TEMPLATE = """You are a helpful customer support assistant for Delivery Hero.
+PROMPT_TEMPLATE = """You are a helpful customer support assistant for Memo Hero Delivery.
 Use the policy documents and the user's order data (if provided) to answer succinctly and politely.
 Cite (briefly) when you use policy text.
 
@@ -63,9 +62,7 @@ class LLMClient:
             return self._mock_generate(prompt)
 
     def _call_hf(self, prompt, max_length):
-        # Using the Hugging Face text generation inference endpoint
-        # Model name can be adjusted in the Streamlit UI
-        model = os.environ.get("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0")  # example
+        model = os.environ.get("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0")
         url = f"https://api-inference.huggingface.co/models/{model}"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         payload = {"inputs": prompt, "parameters": {"max_new_tokens": 256, "temperature": 0.2}}
@@ -73,31 +70,23 @@ class LLMClient:
         if resp.status_code != 200:
             return f"(HF API error {resp.status_code}) {resp.text}"
         data = resp.json()
-        # HF can return list or dict depending on model
         if isinstance(data, list) and 'generated_text' in data[0]:
             return data[0]['generated_text']
         if isinstance(data, dict) and 'generated_text' in data:
             return data['generated_text']
-        # Some inference endpoints return the full completion in a different shape
         return str(data)
 
     def _mock_generate(self, prompt):
-        # Minimal, safe fallback — summarize the retrieved policy text and echo order info
-        # This is intentionally simple so you can demo without any external API.
-        # It uses heuristics: look for keywords and reply with canned templates.
         text = prompt.lower()
         if "cancel" in text or "cancellation" in text:
-            return "You can cancel orders within 5 minutes after placing the order if the restaurant hasn't confirmed. If the restaurant accepted it, cancellation may not be possible or may incur a fee. Please provide your order id to check further."
+            return "You can cancel orders within 5 minutes if the restaurant hasn't confirmed. If already accepted, cancellation may not be possible."
         if "refund" in text:
-            return "Refunds are available for missing or incorrect items and non-delivery. Contact support within 24 hours of delivery with your order id and details. Refund processing can take up to 7 business days."
-        if "where is" in text or "where is order" in text or "status" in text:
-            if "order id" in text or "order id:" in text:
-                return "I see you asked about an order — please provide the order id and I'll fetch the latest status for you."
-            return "Please provide your order id so I can look up the status. If you already provided it, confirm the order id."
-        return "Thanks for your question — could you share the order id or clarify your request? (This is a mock fallback response.)"
+            return "Refunds are available for missing or incorrect items and non-delivery. Please provide your order id to check further."
+        if "where is" in text or "status" in text:
+            return "Please provide your order id so I can look up the status."
+        return "Thanks for your question — could you share the order id or clarify your request?"
 
 def answer_query(user_query, order_id=None, llm_mode="hf"):
-    # retrieve policy snippets
     snippets = get_relevant_docs(user_query, k=3)
     policy_texts = "\n\n".join(snippets)
 
@@ -118,6 +107,4 @@ def answer_query(user_query, order_id=None, llm_mode="hf"):
 
     client = LLMClient(mode=llm_mode)
     resp = client.generate(prompt)
-    # Basic post-processing: if order looked up and LLM didn't include it, add a small note
     return resp.strip()
-
