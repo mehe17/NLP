@@ -4,7 +4,7 @@ from retriever import build_index
 import os
 
 # Page config
-st.set_page_config(page_title="Delivery Hero — Support Chatbot (Demo)", layout="wide")
+st.set_page_config(page_title="Memo Hero — Support Chatbot (Demo)", layout="wide")
 
 # Title
 st.title("🟠 Delivery Hero — LLM Support Chatbot (Demo)")
@@ -42,9 +42,6 @@ if st.sidebar.button("(Re)build RAG index"):
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if "rerun_flag" not in st.session_state:
-    st.session_state.rerun_flag = False
-
 # Layout
 col1, col2 = st.columns([1, 2])
 
@@ -81,16 +78,11 @@ with col2:
                 order_id=order_id if order_id else None,
                 llm_mode=mode
             )
+        # Append directly to history; no rerun needed
         st.session_state.history.append({"user": query, "bot": resp})
-        st.session_state.rerun_flag = True  # safe rerun flag
-
-    # Safe rerun
-    if st.session_state.rerun_flag:
-        st.session_state.rerun_flag = False
-        st.experimental_rerun()
 
     # Display last 10 chat turns
-    for i, turn in enumerate(reversed(st.session_state.history[-10:])):
+    for turn in reversed(st.session_state.history[-10:]):
         st.markdown(f"**You:** {turn['user']}")
         st.markdown(f"**Bot:** {turn['bot']}")
         st.markdown("---")
