@@ -14,10 +14,10 @@ st.title("🟠 Memo Hero Delivery — LLM Support Chatbot (Demo)")
 with st.expander("Setup & Notes"):
     st.markdown(
         """
-- This demo uses **RAG** (FAISS + SentenceTransformers) to retrieve policy excerpts and a simple LLM wrapper.
+- This demo uses a simple LLM wrapper for FAQ/chat.
 - LLM modes:
-  - **HF**: Uses Hugging Face Inference API. Token is securely stored in Streamlit Secrets.
-  - **Mock**: Fast local fallback (rule-based) for demos without any API keys.
+  - **HF**: Hugging Face Inference API. Token is stored in Streamlit Secrets.
+  - **Mock**: Fast local fallback (rule-based).
 """
     )
 
@@ -26,14 +26,14 @@ with st.expander("Setup & Notes"):
 # -----------------------
 st.sidebar.header("Configuration")
 mode = st.sidebar.selectbox("LLM Mode", ["hf", "mock"])
-hf_model = st.sidebar.text_input("HF Model (optional)", value="moonshotai/Kimi-K2-Instruct-v0")
-os.environ["HF_MODEL"] = hf_model  # optional model override
+hf_model = st.sidebar.text_input("HF Model (optional)", value="moonshotai/Kimi-K2-Instruct")
+os.environ["HF_MODEL"] = hf_model  # override model if needed
 
 # -----------------------
 # Initialize Hugging Face client (online LLM)
 # -----------------------
 if mode == "hf":
-    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
+    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]  # load token from Secrets
     client = OpenAI(
         base_url="https://router.huggingface.co/v1",
         api_key=os.environ["HF_TOKEN"],
@@ -90,6 +90,7 @@ def answer_query(query, order_id=None):
     if order_id:
         messages.append({"role": "system", "content": f"Order ID: {order_id}"})
 
+    # Call Hugging Face LLM via OpenAI-compatible API
     completion = client.chat.completions.create(
         model=os.environ["HF_MODEL"],
         messages=messages
