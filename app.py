@@ -1,144 +1,122 @@
-import streamlit as st
+"""
+chatbot.py
+- LLM wrapper (supports HF Inference API or a mock fallback)
+- Assemble RAG prompt (retrieve docs + order lookup)
+- Expose `answer_query(user_query, order_id=None, mode='hf')`
+"""
+
 import os
-from openai import OpenAI
+import requests
+import json
+from retriever import get_relevant_docs
+import pandas as pd
+from pathlib import Path
 
-# -----------------------
-# Page configuration
-# -----------------------
-st.set_page_config(page_title="Memo Hero Delivery — Support Chatbot (Demo)", layout="wide")
-st.title("🟠 Memo Hero Delivery — LLM Support Chatbot (Demo)")
+DATA_DIR = Path("data")
+ORDERS_PATH = DATA_DIR / "orders.csv"
 
-# -----------------------
-# Setup & Notes
-# -----------------------
-with st.expander("Setup & Notes"):
-    st.markdown(
+# Basic prompt template
+PROMPT_TEMPLATE = """You are a helpful customer support assistant for Delivery Hero.
+Use the policy documents and the user's order data (if provided) to answer succinctly and politely.
+Cite (briefly) when you use policy text.
+
+Policy excerpts:
+{policy_texts}
+
+Order info:
+{order_text}
+
+User question:
+{user_question}
+
+Answer in 2-4 concise sentences. If you don't have enough info, ask for the order id or more details.
+"""
+
+def load_order(order_id):
+    if not ORDERS_PATH.exists():
+        return None
+    df = pd.read_csv(ORDERS_PATH, dtype=str)
+    row = df[df['order_id'] == str(order_id)]
+    if row.empty:
+        return None
+    return row.iloc[0].to_dict()
+
+def _format_order_text(order):
+    if not order:
+        return "No order provided."
+    pieces = [f"{k}: {v}" for k,v in order.items() if pd.notna(v)]
+    return "\n".join(pieces)
+
+class LLMClient:
+    def __init__(self, mode="hf"):
         """
-- This demo uses either a **mock** rule-based chatbot or a Hugging Face hosted LLM.
-- LLM modes:
-  - **HF**: Hugging Face Inference API. Token stored securely in Streamlit Secrets.
-  - **Mock**: Fast local fallback (rule-based) for demos without any API keys.
-"""
-    )
+        mode: 'hf' for Hugging Face Inference API, 'mock' for fallback rule-based
+        If mode == 'hf', requires env var HF_API_TOKEN
+        """
+        self.mode = mode
+        self.hf_token = os.environ.get("HF_API_TOKEN")
 
-# -----------------------
-# Sidebar configuration
-# -----------------------
-st.sidebar.header("Configuration")
-mode = st.sidebar.selectbox("LLM Mode", ["hf", "mock"])
-hf_model = st.sidebar.text_input("HF Model (optional)", value="moonshotai/Kimi-K2-Instruct")
-os.environ["HF_MODEL"] = hf_model  # override model if needed
+    def generate(self, prompt, max_length=512):
+        if self.mode == "hf" and self.hf_token:
+            return self._call_hf(prompt, max_length)
+        else:
+            return self._mock_generate(prompt)
 
-# -----------------------
-# Initialize Hugging Face client
-# -----------------------
-if mode == "hf":
-    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
-    client = OpenAI(
-        base_url="https://router.huggingface.co/v1",
-        api_key=os.environ["HF_TOKEN"],
-    )
+    def _call_hf(self, prompt, max_length):
+        # Using the Hugging Face text generation inference endpoint
+        # Model name can be adjusted in the Streamlit UI
+        model = os.environ.get("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0")  # example
+        url = f"https://api-inference.huggingface.co/models/{model}"
+        headers = {"Authorization": f"Bearer {self.hf_token}"}
+        payload = {"inputs": prompt, "parameters": {"max_new_tokens": 256, "temperature": 0.2}}
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if resp.status_code != 200:
+            return f"(HF API error {resp.status_code}) {resp.text}"
+        data = resp.json()
+        # HF can return list or dict depending on model
+        if isinstance(data, list) and 'generated_text' in data[0]:
+            return data[0]['generated_text']
+        if isinstance(data, dict) and 'generated_text' in data:
+            return data['generated_text']
+        # Some inference endpoints return the full completion in a different shape
+        return str(data)
 
-# -----------------------
-# Initialize session state
-# -----------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
+    def _mock_generate(self, prompt):
+        # Minimal, safe fallback — summarize the retrieved policy text and echo order info
+        # This is intentionally simple so you can demo without any external API.
+        # It uses heuristics: look for keywords and reply with canned templates.
+        text = prompt.lower()
+        if "cancel" in text or "cancellation" in text:
+            return "You can cancel orders within 5 minutes after placing the order if the restaurant hasn't confirmed. If the restaurant accepted it, cancellation may not be possible or may incur a fee. Please provide your order id to check further."
+        if "refund" in text:
+            return "Refunds are available for missing or incorrect items and non-delivery. Contact support within 24 hours of delivery with your order id and details. Refund processing can take up to 7 business days."
+        if "where is" in text or "where is order" in text or "status" in text:
+            if "order id" in text or "order id:" in text:
+                return "I see you asked about an order — please provide the order id and I'll fetch the latest status for you."
+            return "Please provide your order id so I can look up the status. If you already provided it, confirm the order id."
+        return "Thanks for your question — could you share the order id or clarify your request? (This is a mock fallback response.)"
 
-# -----------------------
-# Mock answer function
-# -----------------------
-def mock_answer(query, order_id=None):
-    q = query.lower()
-    if "cancel" in q:
-        msg = (
-            "You can cancel orders within 5 minutes after placing the order "
-            "if the restaurant hasn't confirmed. If the restaurant accepted it, "
-            "cancellation may not be possible or may incur a fee."
-        )
-    elif "refund" in q:
-        msg = (
-            "Refunds are available for missing or incorrect items and non-delivery. "
-            "Contact Memo Hero Delivery support within 24 hours of delivery."
-        )
-    elif "track" in q or "status" in q:
-        msg = "You can track your order using the tracking number sent to your email or app."
-    elif "delivery time" in q or "delivery times" in q:
-        msg = (
-            "Typical delivery times range from 20 to 45 minutes depending on the restaurant and location."
-        )
-    elif "missing item" in q or "item missing" in q:
-        msg = (
-            "If an item is missing from your order, please contact Memo Hero Delivery support "
-            "with your order id and the missing item details."
-        )
-    else:
-        msg = "I'm sorry, I didn't understand that. Can you rephrase or ask about cancellations, refunds, tracking, or delivery times?"
+def answer_query(user_query, order_id=None, llm_mode="hf"):
+    # retrieve policy snippets
+    snippets = get_relevant_docs(user_query, k=3)
+    policy_texts = "\n\n".join(snippets)
 
+    order = None
+    order_text = "No order provided."
     if order_id:
-        msg += f" (Order ID: {order_id})"
-    return msg
+        order = load_order(order_id)
+        if order:
+            order_text = _format_order_text(order)
+        else:
+            order_text = f"No order found with id {order_id}."
 
-# -----------------------
-# Function to query online HF LLM (text-completion)
-# -----------------------
-def answer_query(query, order_id=None):
-    if mode == "mock":
-        return mock_answer(query, order_id)
-
-    prompt = query
-    if order_id:
-        prompt = f"Order ID: {order_id}\n\n{query}"
-
-    completion = client.completions.create(
-        model=os.environ["HF_MODEL"],
-        prompt=prompt,
-        max_tokens=200
+    prompt = PROMPT_TEMPLATE.format(
+        policy_texts=policy_texts,
+        order_text=order_text,
+        user_question=user_query
     )
-    return completion.choices[0].text.strip()
 
-# -----------------------
-# Layout: Columns
-# -----------------------
-col1, col2 = st.columns([1, 2])
-
-# Left column: Quick actions
-with col1:
-    st.header("Quick actions")
-    if st.button("Show sample questions"):
-        st.write(
-            """
-- Can I cancel my order?
-- How do I request a refund?
-- Where is order #21345?
-- My order is missing an item — what should I do?
-- What are the delivery times?
-- How do I track my order?
-"""
-        )
-    st.markdown("---")
-    st.write("Provide an order id to allow order-specific lookups.")
-    order_id = st.text_input("Order ID (optional)", value="21345")
-
-# Right column: Chat interface
-with col2:
-    st.header("Chat")
-    query = st.text_input(
-        "Ask the Memo Hero Delivery bot anything about orders, cancellations, refunds, delivery times, tracking, or missing items...",
-        key="query_input"
-    )
-    submit = st.button("Send")
-
-    if submit and query:
-        with st.spinner("Thinking..."):
-            resp = answer_query(query, order_id=order_id if order_id else None)
-        st.session_state.history.append({"user": query, "bot": resp})
-
-    # Keep only last 20 messages
-    st.session_state.history = st.session_state.history[-20:]
-
-    # Display chat history
-    for turn in reversed(st.session_state.history):
-        st.markdown(f"**You:** {turn['user']}")
-        st.markdown(f"**Bot:** {turn['bot']}")
-        st.markdown("---")
+    client = LLMClient(mode=llm_mode)
+    resp = client.generate(prompt)
+    # Basic post-processing: if order looked up and LLM didn't include it, add a small note
+    return resp.strip()
