@@ -47,8 +47,6 @@ if st.sidebar.button("(Re)build RAG index"):
 # -----------------------
 if "history" not in st.session_state:
     st.session_state.history = []
-if "query_input" not in st.session_state:
-    st.session_state.query_input = ""
 
 # -----------------------
 # Mock answer function
@@ -88,10 +86,10 @@ with col1:
 # Right column: Chat interface
 with col2:
     st.header("Chat")
+    # Safe text input using only the key
     query = st.text_input(
         "Ask the Memo Hero Delivery bot anything about orders, cancellations, refunds, delivery times...",
-        key="query_input",
-        value=st.session_state.query_input
+        key="query_input"
     )
     submit = st.button("Send")
 
@@ -103,7 +101,6 @@ with col2:
                 resp = answer_query(query, order_id=order_id if order_id else None, llm_mode=mode)
         # Append to history
         st.session_state.history.append({"user": query, "bot": resp})
-        st.session_state.query_input = ""  # clear input after send
 
     # Keep only last 20 messages
     st.session_state.history = st.session_state.history[-20:]
