@@ -1,1 +1,26 @@
+Cancellation Policy:
+- Orders can be cancelled within 5 minutes of placing the order if the restaurant has not confirmed.
+- If the restaurant has accepted the order, cancellations are only allowed at the restaurant's discretion and may incur a fee.
+
+Refund Policy:
+- Refunds are issued for missing items, incorrect items, or non-delivery.
+- To request a refund, contact support within 24 hours of the order's delivery time and provide order id, photos (if applicable), and a short description.
+- Refund processing time is up to 7 business days.
+
+Delivery Times:
+- Estimated delivery times are calculated based on restaurant prep + driver ETA. Typical urban deliveries: 20-45 minutes.
+- Peak periods (weekends, meal times) can add 10-25 minutes.
+
+Payment Issues:
+- If a payment fails, the order will not be placed. If charged incorrectly, contact support with payment method and order id.
+
+Account & Promotions:
+- Promotional discounts are applied at checkout. Only one promo code may be used per order unless otherwise stated.
+- Promo refunds are processed as account credits, not cash refunds.
+
+Order Changes:
+- Modifying an order after placement depends on restaurant acceptance. Small changes may be allowed if the restaurant hasn't started preparing.
+
+Contacting Support:
+- Provide the order id, time of order, and brief description. Attach photos for incorrect or damaged items.
 
