@@ -49,18 +49,40 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 # -----------------------
-# Mock answer function
+# Improved mock answer function
 # -----------------------
 def mock_answer(query):
     q = query.lower()
+
     if "cancel" in q:
-        return "You can cancel orders within 5 minutes after placing the order if the restaurant hasn't confirmed. If the restaurant accepted it, cancellation may not be possible or may incur a fee. Please provide your order id to check further."
+        return (
+            "You can cancel orders within 5 minutes after placing the order "
+            "if the restaurant hasn't confirmed. If the restaurant accepted it, "
+            "cancellation may not be possible or may incur a fee. Please provide your order id to check further."
+        )
     elif "refund" in q:
-        return "Refunds are available for missing or incorrect items and non-delivery. Contact Memo Hero Delivery support within 24 hours of delivery with your order id and details. Refund processing can take up to 7 business days."
+        return (
+            "Refunds are available for missing or incorrect items and non-delivery. "
+            "Contact Memo Hero Delivery support within 24 hours of delivery with your order id and details. "
+            "Refund processing can take up to 7 business days."
+        )
     elif "track" in q or "status" in q:
-        return "You can track your order using the tracking number sent to your email or app."
+        return (
+            "You can track your order using the tracking number sent to your email or app. "
+            "If you don’t have the tracking number, provide your order id to check the status."
+        )
+    elif "delivery time" in q or "delivery times" in q:
+        return (
+            "Typical delivery times range from 20 to 45 minutes depending on the restaurant and location. "
+            "Provide your order id for a more accurate estimate."
+        )
+    elif "missing item" in q or "item missing" in q:
+        return (
+            "If an item is missing from your order, please contact Memo Hero Delivery support with your order id "
+            "and the missing item details. Refunds or replacements can be arranged."
+        )
     else:
-        return "I'm sorry, I didn't understand that. Can you rephrase?"
+        return "I'm sorry, I didn't understand that. Can you rephrase or ask about cancellations, refunds, tracking, or delivery times?"
 
 # -----------------------
 # Layout: Columns
@@ -77,6 +99,8 @@ with col1:
 - How do I request a refund?
 - Where is order #21345?
 - My order is missing an item — what should I do?
+- What are the delivery times?
+- How do I track my order?
 """
         )
     st.markdown("---")
@@ -88,7 +112,7 @@ with col2:
     st.header("Chat")
     # Safe text input using only the key
     query = st.text_input(
-        "Ask the Memo Hero Delivery bot anything about orders, cancellations, refunds, delivery times...",
+        "Ask the Memo Hero Delivery bot anything about orders, cancellations, refunds, delivery times, tracking, or missing items...",
         key="query_input"
     )
     submit = st.button("Send")
