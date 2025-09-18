@@ -1,1 +1,6 @@
+order_id,user_name,restaurant,item,status,placed_at,eta_minutes,total_amount
+21345,Alice Johnson,Burger King,Whopper x1,Out for delivery,2025-09-16 18:32:00,12,8.99
+21346,Bob Smith,Subway,Chicken Teriyaki x1,Delivered,2025-09-15 12:10:00,0,6.50
+21347,Clara Lee,Pizza Palace,Margherita x2,Preparing,2025-09-17 11:05:00,25,15.00
+21348,Daniel Kim,Sushi Express,Salmon Roll x1,Cancelled,2025-09-14 20:00:00,0,9.50
 
