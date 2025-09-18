@@ -14,10 +14,10 @@ st.title("🟠 Memo Hero Delivery — LLM Support Chatbot (Demo)")
 with st.expander("Setup & Notes"):
     st.markdown(
         """
-- This demo uses a simple LLM wrapper for FAQ/chat.
+- This demo uses either a **mock** rule-based chatbot or a Hugging Face hosted LLM.
 - LLM modes:
-  - **HF**: Hugging Face Inference API. Token is stored in Streamlit Secrets.
-  - **Mock**: Fast local fallback (rule-based).
+  - **HF**: Hugging Face Inference API. Token stored securely in Streamlit Secrets.
+  - **Mock**: Fast local fallback (rule-based) for demos without any API keys.
 """
     )
 
@@ -30,10 +30,10 @@ hf_model = st.sidebar.text_input("HF Model (optional)", value="moonshotai/Kimi-K
 os.environ["HF_MODEL"] = hf_model  # override model if needed
 
 # -----------------------
-# Initialize Hugging Face client (online LLM)
+# Initialize Hugging Face client
 # -----------------------
 if mode == "hf":
-    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]  # load token from Secrets
+    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
     client = OpenAI(
         base_url="https://router.huggingface.co/v1",
         api_key=os.environ["HF_TOKEN"],
@@ -80,22 +80,22 @@ def mock_answer(query, order_id=None):
     return msg
 
 # -----------------------
-# Function to query online LLM
+# Function to query online HF LLM (text-completion)
 # -----------------------
 def answer_query(query, order_id=None):
     if mode == "mock":
         return mock_answer(query, order_id)
 
-    messages = [{"role": "user", "content": query}]
+    prompt = query
     if order_id:
-        messages.append({"role": "system", "content": f"Order ID: {order_id}"})
+        prompt = f"Order ID: {order_id}\n\n{query}"
 
-    # Call Hugging Face LLM via OpenAI-compatible API
-    completion = client.chat.completions.create(
+    completion = client.completions.create(
         model=os.environ["HF_MODEL"],
-        messages=messages
+        prompt=prompt,
+        max_tokens=200
     )
-    return completion.choices[0].message
+    return completion.choices[0].text.strip()
 
 # -----------------------
 # Layout: Columns
