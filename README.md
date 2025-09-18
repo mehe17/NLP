@@ -1,4 +1,4 @@
-# AI Customer Support Chatbot — Delivery Hero (Demo)
+# AI Customer Support Chatbot — Memo Hero Delivery (Demo)
 
 A small demo showing how to build a retrieval-augmented LLM chatbot for delivery support queries.
 
